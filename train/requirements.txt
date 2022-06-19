@@ -1,0 +1,6 @@
+tensorflow-cpu
+pandas
+sklearn
+nltk
+gensim
+matplotlib

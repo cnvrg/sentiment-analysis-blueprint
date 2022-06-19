@@ -1,0 +1,157 @@
+---
+title: Sentiment Analysis Train # Required on creation, replaces the "flow" parameter
+version: 1.0.0 # Required
+description: Analyze sentiment analysis in text
+long_description: This blueprint allows you to train and deploy a custom model that can analyse sentiment in text absed on your data
+# Optional properties for crediting authors
+author: "cnvrg"
+author_email: "info@cnvrg.io"
+
+# At least one tag [inference, training, data] must be present
+tags:
+  - training
+  - nlp
+
+# List of tasks (libraries)
+tasks:
+  - title: S3 Connector
+    top: 300
+    left: 0
+
+    # Type must be according to the flow task conventions (data, exec, deploy)
+    type: exec
+
+    # The library data
+    library: s3-connector
+    library_version: 1.0.0
+
+    # The flattened library parameters (in this case we have training library)
+    command: python s3-connector.py
+
+    requirements:
+      cpu: 3.5
+      memory: 7
+      gpu: 0
+      hpu: 0
+
+    image: cnvrg:v5.0
+    language: python3
+
+    # The "arguments" property changes to "params", rest remains the same.
+    # Params in the blueprint yaml can be used to override the arguments in the library.
+    params:
+      - key: endpoint
+        type: 'categorical'
+        values:
+          - 'http://s3.amazonaws.com download'
+      - key: bucketname
+        type: 'categorical'
+        values:
+          - 'libhub-readme'
+      - key: localdir
+        type: 'categorical'
+        values:
+          - '/cnvrg'
+      - key: prefix
+        type: 'categorical'
+        values:
+          - 'sentiment_analysis_data/'
+  - title: Train
+    top: 300
+    left: 400
+
+    # Type must be according to the flow task conventions (data, exec, deploy)
+    type: exec
+
+    # The library data
+    library: sentiment-analysis-train
+    library_version: 1.0.0
+
+    # The flattened library parameters (in this case we have training library)
+    command: python3 train.py
+
+    requirements:
+      cpu: 3.5
+      memory: 8
+      gpu: 0
+      hpu: 0
+
+    image: python:3.8
+    language: python3
+
+    # The "arguments" property changes to "params", rest remains the same.
+    # Params in the blueprint yaml can be used to override the arguments in the library.
+    params:
+      - key: input_filename
+        type: 'categorical'
+        values:
+          - '/input/s3_connector/sentiment_analysis_data/1.6m_twitts.csv'
+      - key: output_token_file
+        type: 'categorical'
+        values:
+          - 'tokenizer.pickle'
+      - key: output_model_file
+        type: 'categorical'
+        values:
+          - 'model.h5'
+      - key: text_column
+        type: 'categorical'
+        values:
+          - 'text'
+      - key: label_column
+        type: 'categorical'
+        values:
+          - 'sentiment'
+      - key: epochs_val
+        type: 'discrete'
+        values:
+          - '10'
+      - key: w2v_epochs_val
+        type: 'discrete'
+        values:
+          - '32'
+      - key: batch_size_val
+        type: 'discrete'
+        values:
+          - '64'
+  - title: Deploy Sentiment Analysis
+    top: 400
+    left: 500
+
+    # Type must be according to the flow task conventions (data, exec, deploy)
+    type: deploy
+
+    # The library data
+    library: sentiment-analysis-inference
+    library_version: 1.0.0
+
+    # The flattened library parameters (in this case we have inference library)
+    kind: webservice
+
+    requirements:
+      cpu: 3.5
+      memory: 8
+      gpu: 0
+      hpu: 0
+
+    image: python:3.8.6
+    language: python3
+    accept_files: false
+
+    file_name: predict.py # the entrypoint file name
+    function_name: predict # the entrypoint function
+    prep_file: '' # preprocess file name
+    prep_function: '' # preprocess function
+    input_example:
+      text: 'this is awesome'
+    input_schema:
+      text: text
+    output_schema:
+      label: text
+      score: number
+
+relations:
+  - from: S3 Connector
+    to: Train
+  - from: Train
+    to: Deploy Sentiment Analysis
