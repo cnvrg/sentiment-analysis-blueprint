@@ -3,6 +3,11 @@ from tensorflow import keras
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import pickle
 import pathlib
+import sys
+scripts_dir = pathlib.Path(__file__).parent.resolve()
+sys.path.append(str(scripts_dir))
+from prerun import download_model_files
+download_model_files()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 if os.path.exists('/input/train'):  # If the model artifacts are from train
