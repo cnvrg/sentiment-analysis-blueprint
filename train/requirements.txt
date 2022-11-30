@@ -1,6 +1,7 @@
-tensorflow-cpu
+tensorflow-macos
 pandas
 sklearn
+scikit-learn
 nltk
 gensim
 matplotlib
