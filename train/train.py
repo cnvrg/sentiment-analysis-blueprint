@@ -60,7 +60,8 @@ print('gpuname: ', tf.config.experimental.list_physical_devices('GPU'))
 def read_dataset(input_filename):
         dataset_columns = ["target", "timestamp", "datetime", "query", "user", "text"]
         dataset_encoding = "ISO-8859-1"
-        return pd.read_csv(input_filename, encoding=dataset_encoding, names=dataset_columns)
+        df = pd.read_csv(input_filename, encoding=dataset_encoding, names=dataset_columns)
+        return df
 
 def decode_sentiment(label):
     decode_map = {0: "NEGATIVE", 2: "NEUTRAL", 4: "POSITIVE"}
@@ -69,7 +70,7 @@ def decode_sentiment(label):
         label = int(label)
     return decode_map[label]
 
-def preprocess(text, stem=False):
+def preprocess(text, stemmer, stem=False):
     # Remove link, user and special characters
     text_cleaning_regex = "@\S+|https?:\S+|http?:\S|[^A-Za-z0-9]+"
     text = re.sub(text_cleaning_regex, ' ', str(text).lower()).strip()
@@ -106,7 +107,7 @@ def tokenize_text(df_train):
     vocab_size = len(tokenizer.word_index) + 1
     return tokenizer, vocab_size
 
-def padding_sequences(df_train, df_test, seq_len):
+def padding_sequences(df_train, df_test, tokenizer, seq_len):
     x_train = pad_sequences(tokenizer.texts_to_sequences(df_train.text), maxlen=seq_len)
     x_test = pad_sequences(tokenizer.texts_to_sequences(df_test.text), maxlen=seq_len)
     return x_train, x_test
@@ -271,7 +272,7 @@ if __name__ == "__main__":
 
     # Pre-process dataset
     stemmer = SnowballStemmer("english")
-    df.text = df.text.apply(lambda x: preprocess(x))
+    df.text = df.text.apply(lambda x: preprocess(x, stemmer))
 
     df_train, df_test = split_train_test_data(df, train_size)
     documents = create_documents(df_train)
@@ -279,7 +280,7 @@ if __name__ == "__main__":
     tokenizer, vocab_size = tokenize_text(df_train)
 
     print("FINISHED WORD2VEC")
-    x_train, x_test = padding_sequences(df_train, df_test, seq_len)
+    x_train, x_test = padding_sequences(df_train, df_test, tokenizer, seq_len)
     print("FINISHED PADDING")
 
     encoder, labels = label_encoding(df_train)
