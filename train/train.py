@@ -58,7 +58,9 @@ keras.backend.set_session(sess)
 print('gpuname: ', tf.config.experimental.list_physical_devices('GPU'))
 
 def read_dataset(input_filename):
-        return pd.read_csv(input_filename, encoding=DATASET_ENCODING, names=DATASET_COLUMNS)
+        dataset_columns = ["target", "timestamp", "datetime", "query", "user", "text"]
+        dataset_encoding = "ISO-8859-1"
+        return pd.read_csv(input_filename, encoding=dataset_encoding, names=dataset_columns)
 
 def decode_sentiment(label):
     decode_map = {0: "NEGATIVE", 2: "NEUTRAL", 4: "POSITIVE"}
@@ -69,7 +71,8 @@ def decode_sentiment(label):
 
 def preprocess(text, stem=False):
     # Remove link, user and special characters
-    text = re.sub(TEXT_CLEANING_RE, ' ', str(text).lower()).strip()
+    text_cleaning_regex = "@\S+|https?:\S+|http?:\S|[^A-Za-z0-9]+"
+    text = re.sub(text_cleaning_regex, ' ', str(text).lower()).strip()
     tokens = []
     for token in text.split():
         if stem:
@@ -78,22 +81,22 @@ def preprocess(text, stem=False):
             tokens.append(token)
     return " ".join(tokens)
 
-def split_train_test_data(df):
+def split_train_test_data(df, train_size):
     # Split train and test
-    df_train, df_test = train_test_split(df, test_size=1 - TRAIN_SIZE, random_state=42)
+    df_train, df_test = train_test_split(df, test_size=1 - train_size, random_state=42)
     return df_train, df_test
 
 def create_documents(df_train):
     return [_text.split() for _text in df_train.text]
 
-def word_2_vector(documents):
+def word_2_vector(documents, w2v_size, w2v_window, w2v_epochs_val, w2v_min_count):
     # Word2vec
-    w2v_model = gensim.models.word2vec.Word2Vec(vector_size=W2V_SIZE,
-                                                window=W2V_WINDOW,
-                                                min_count=W2V_MIN_COUNT,
+    w2v_model = gensim.models.word2vec.Word2Vec(vector_size=w2v_size,
+                                                window=w2v_window,
+                                                min_count=w2v_min_count,
                                                 workers=8)
     w2v_model.build_vocab(documents)
-    w2v_model.train(documents, total_examples=len(documents), epochs=W2V_EPOCH)
+    w2v_model.train(documents, total_examples=len(documents), epochs=w2v_epochs_val)
     return w2v_model
 
 def tokenize_text(df_train):
@@ -103,15 +106,15 @@ def tokenize_text(df_train):
     vocab_size = len(tokenizer.word_index) + 1
     return tokenizer, vocab_size
 
-def padding_sequences(df_train, df_test):
-    x_train = pad_sequences(tokenizer.texts_to_sequences(df_train.text), maxlen=SEQUENCE_LENGTH)
-    x_test = pad_sequences(tokenizer.texts_to_sequences(df_test.text), maxlen=SEQUENCE_LENGTH)
+def padding_sequences(df_train, df_test, seq_len):
+    x_train = pad_sequences(tokenizer.texts_to_sequences(df_train.text), maxlen=seq_len)
+    x_test = pad_sequences(tokenizer.texts_to_sequences(df_test.text), maxlen=seq_len)
     return x_train, x_test
 
 def label_encoding(df_train):
     # Label encoder
     labels = df_train.target.unique().tolist()
-    labels.append(NEUTRAL)
+    labels.append("NEUTRAL")
 
     encoder = LabelEncoder()
     encoder.fit(df_train.target.tolist())
@@ -124,14 +127,14 @@ def prepare_labels(df_train, df_test, encoder):
     y_test = y_test.reshape(-1, 1)
     return y_train, y_test
 
-def create_embedding_layer(vocab_size, tokenizer, w2v_model):
+def create_embedding_layer(vocab_size, tokenizer, w2v_model, w2v_size, seq_len):
     # Embedding layer
-    embedding_matrix = np.zeros((vocab_size, W2V_SIZE))
+    embedding_matrix = np.zeros((vocab_size, w2v_size))
     for word, i in tokenizer.word_index.items():
         if word in w2v_model.wv:
             embedding_matrix[i] = w2v_model.wv[word]
 
-    embedding_layer = Embedding(vocab_size, W2V_SIZE, weights=[embedding_matrix], input_length=SEQUENCE_LENGTH,
+    embedding_layer = Embedding(vocab_size, w2v_size, weights=[embedding_matrix], input_length=seq_len,
                                 trainable=False)
     return embedding_layer
 
@@ -154,17 +157,17 @@ def get_callbacks():
     return [ReduceLROnPlateau(monitor='val_loss', patience=5, cooldown=0),
                 EarlyStopping(monitor='val_accuracy', min_delta=1e-4, patience=5)]
 
-def fit_model(model, x_train, y_train, callbacks):
+def fit_model(model, x_train, y_train, epochs_val, batch_size_val, callbacks):
         history = model.fit(x_train, y_train,
-                        batch_size=BATCH_SIZE,
-                        epochs=EPOCHS,
+                        batch_size=batch_size_val,
+                        epochs=epochs_val,
                         validation_split=0.1,
                         verbose=1,
                         callbacks=callbacks)
         return history
 
-def get_score(model):
-    score = model.evaluate(x_test, y_test, batch_size=BATCH_SIZE)
+def get_score(model, batch_size_val):
+    score = model.evaluate(x_test, y_test, batch_size=batch_size_val)
     return score
 
 def get_performace_metrics(history):
@@ -232,48 +235,36 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size_val', action='store', dest='batch_size_val', default=256, required=False,
                         help="""int. size of each batch to train on""")
 
+    parser.add_argument('--train_size', action='store', dest='train_size', default=0.8, required=False,
+                        help="""Fraction of dataset to be assigned as training data""")
+
+    parser.add_argument('--w2v_size', action='store', dest='w2v_size', default=300, required=False,
+                        help="""vector size parameter in word to vector model """)
+
+    parser.add_argument('--w2v_window', action='store', dest='w2v_window', default=7, required=False,
+                        help="""window size parameter in word to vector model """)
+
+    parser.add_argument('--w2v_min_count', action='store', dest='w2v_min_count', default=10, required=False,
+                        help="""min count parameter in word to vector model """)
+
+    parser.add_argument('--seq_len', action='store', dest='seq_len', default=300, required=False,
+                        help="""seq len for NLP model""")
+
     args = parser.parse_args()
     output_token_file = args.output_token_file
     output_model_file = args.output_model_file
     text_column = args.text_column
     label_column = args.label_column
     epochs_val = int(args.epochs_val)
-    w2v_epochs_val = int(args.w2v_epochs_val)
     batch_size_val = int(args.batch_size_val)
     input_filename = args.input_filename
     file_dir = args.local_dir
-
-    # Settings
-    # DATASET
-    DATASET_COLUMNS = ["target", "timestamp", "datetime", "query", "user", "text"]
-    DATASET_ENCODING = "ISO-8859-1"
-    TRAIN_SIZE = 0.8
-
-    # TEXT CLENAING
-    TEXT_CLEANING_RE = "@\S+|https?:\S+|http?:\S|[^A-Za-z0-9]+"
-
-    # WORD2VEC
-    W2V_SIZE = 300
-    W2V_WINDOW = 7
-    W2V_EPOCH = w2v_epochs_val
-    W2V_MIN_COUNT = 10
-
-    # KERAS
-    SEQUENCE_LENGTH = 300
-    EPOCHS = epochs_val
-    BATCH_SIZE = batch_size_val
-
-    # SENTIMENT
-    POSITIVE = "POSITIVE"
-    NEGATIVE = "NEGATIVE"
-    NEUTRAL = "NEUTRAL"
-    SENTIMENT_THRESHOLDS = (0.4, 0.7)
-
-    # EXPORT
-    KERAS_MODEL = "model.h5"
-    WORD2VEC_MODEL = "model.w2v"
-    TOKENIZER_MODEL = "tokenizer.pkl"
-    ENCODER_MODEL = "encoder.pkl"
+    train_size = args.train_size
+    w2v_size = int(args.w2v_size)
+    w2v_window = int(args.w2v_window)
+    w2v_epochs_val = int(args.w2v_epochs_val)
+    w2v_min_count = int(args.w2v_min_count)
+    seq_len = int(args.seq_len)
 
     df = read_dataset(input_filename)
     df.target = df.target.apply(lambda x: decode_sentiment(x))
@@ -282,20 +273,20 @@ if __name__ == "__main__":
     stemmer = SnowballStemmer("english")
     df.text = df.text.apply(lambda x: preprocess(x))
 
-    df_train, df_test = split_train_test_data(df)
+    df_train, df_test = split_train_test_data(df, train_size)
     documents = create_documents(df_train)
-    w2v_model = word_2_vector(documents)
+    w2v_model = word_2_vector(documents, w2v_size, w2v_window, w2v_epochs_val, w2v_min_count)
     tokenizer, vocab_size = tokenize_text(df_train)
 
     print("FINISHED WORD2VEC")
-    x_train, x_test = padding_sequences(df_train, df_test)
+    x_train, x_test = padding_sequences(df_train, df_test, seq_len)
     print("FINISHED PADDING")
 
     encoder, labels = label_encoding(df_train)
     y_train, y_test = prepare_labels(df_train, df_test, encoder)
     print("FINISHED TRAINING")
 
-    embedding_layer = create_embedding_layer(vocab_size, tokenizer, w2v_model)
+    embedding_layer = create_embedding_layer(vocab_size, tokenizer, w2v_model, w2v_size, seq_len)
     
     print("BUILDING MODEL")
     model = build_model(embedding_layer)
@@ -304,8 +295,8 @@ if __name__ == "__main__":
     # Callbacks
     callbacks = get_callbacks()
 
-    history = fit_model(model, x_train, y_train, callbacks)
-    score = get_score(model)
+    history = fit_model(model, x_train, y_train, epochs_val, batch_size_val, callbacks)
+    score = get_score(model, batch_size_val)
     print()
     print("ACCURACY:", score[1])
     print("LOSS:", score[0])
