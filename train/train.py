@@ -58,12 +58,14 @@ keras.backend.set_session(sess)
 print('gpuname: ', tf.config.experimental.list_physical_devices('GPU'))
 
 def read_dataset(input_filename):
+        ''' Reads the input .csv file into a dataframe '''
         dataset_columns = ["target", "timestamp", "datetime", "query", "user", "text"]
         dataset_encoding = "ISO-8859-1"
         df = pd.read_csv(input_filename, encoding=dataset_encoding, names=dataset_columns)
         return df
 
 def decode_sentiment(label):
+    ''' Assigns string label to each integer label '''
     decode_map = {0: "NEGATIVE", 2: "NEUTRAL", 4: "POSITIVE"}
     if type(label) == str:
         print(label)
@@ -71,7 +73,7 @@ def decode_sentiment(label):
     return decode_map[label]
 
 def preprocess(text, stemmer, stem=False):
-    # Remove link, user and special characters
+    ''' Removes links, user and special characters '''
     text_cleaning_regex = "@\S+|https?:\S+|http?:\S|[^A-Za-z0-9]+"
     text = re.sub(text_cleaning_regex, ' ', str(text).lower()).strip()
     tokens = []
@@ -83,15 +85,16 @@ def preprocess(text, stemmer, stem=False):
     return " ".join(tokens)
 
 def split_train_test_data(df, train_size):
-    # Split train and test
+    ''' Splits the train-test dataset based on the above defined ration '''
     df_train, df_test = train_test_split(df, test_size=1 - train_size, random_state=42)
     return df_train, df_test
 
 def create_documents(df_train):
+    ''' Generating document for further processing '''
     return [_text.split() for _text in df_train.text]
 
 def word_2_vector(documents, w2v_size, w2v_window, w2v_epochs_val, w2v_min_count):
-    # Word2vec
+    ''' Trains the word 2 vector model '''
     w2v_model = gensim.models.word2vec.Word2Vec(vector_size=w2v_size,
                                                 window=w2v_window,
                                                 min_count=w2v_min_count,
@@ -101,19 +104,20 @@ def word_2_vector(documents, w2v_size, w2v_window, w2v_epochs_val, w2v_min_count
     return w2v_model
 
 def tokenize_text(df_train):
-    # Tokenize text
+    ''' Fits the tokenizer on text '''
     tokenizer = Tokenizer()
     tokenizer.fit_on_texts(df_train.text)
     vocab_size = len(tokenizer.word_index) + 1
     return tokenizer, vocab_size
 
 def padding_sequences(df_train, df_test, tokenizer, seq_len):
+    ''' Padding of sequences '''
     x_train = pad_sequences(tokenizer.texts_to_sequences(df_train.text), maxlen=seq_len)
     x_test = pad_sequences(tokenizer.texts_to_sequences(df_test.text), maxlen=seq_len)
     return x_train, x_test
 
 def label_encoding(df_train):
-    # Label encoder
+    ''' Fitting encoder and generating labels list '''
     labels = df_train.target.unique().tolist()
     labels.append("NEUTRAL")
 
@@ -122,6 +126,7 @@ def label_encoding(df_train):
     return encoder, labels
 
 def prepare_labels(df_train, df_test, encoder):
+    ''' Prepare train and test labels '''
     y_train = encoder.transform(df_train.target.tolist())
     y_test = encoder.transform(df_test.target.tolist())
     y_train = y_train.reshape(-1, 1)
@@ -129,7 +134,7 @@ def prepare_labels(df_train, df_test, encoder):
     return y_train, y_test
 
 def create_embedding_layer(vocab_size, tokenizer, w2v_model, w2v_size, seq_len):
-    # Embedding layer
+    ''' Generate embedding layer '''
     embedding_matrix = np.zeros((vocab_size, w2v_size))
     for word, i in tokenizer.word_index.items():
         if word in w2v_model.wv:
@@ -140,7 +145,7 @@ def create_embedding_layer(vocab_size, tokenizer, w2v_model, w2v_size, seq_len):
     return embedding_layer
 
 def build_model(embedding_layer):
-    # Build model
+    ''' Builds the model and returns it '''
     model = Sequential()
     model.add(embedding_layer)
     model.add(Dropout(0.5))
@@ -149,29 +154,33 @@ def build_model(embedding_layer):
     return model
 
 def compile_model(model):
-    # Compile model
+    ''' Compiles the model '''
     model.compile(loss='binary_crossentropy',
                 optimizer="adam",
                 metrics=['accuracy'])
 
 def get_callbacks():
+    ''' Define callback '''
     return [ReduceLROnPlateau(monitor='val_loss', patience=5, cooldown=0),
                 EarlyStopping(monitor='val_accuracy', min_delta=1e-4, patience=5)]
 
 def fit_model(model, x_train, y_train, epochs_val, batch_size_val, callbacks):
-        history = model.fit(x_train, y_train,
+    ''' Fits the model and stores the history '''
+    history = model.fit(x_train, y_train,
                         batch_size=batch_size_val,
                         epochs=epochs_val,
                         validation_split=0.1,
                         verbose=1,
                         callbacks=callbacks)
-        return history
+    return history
 
 def get_score(model, x_test, y_test, batch_size_val):
+    ''' Generates the score of the model '''
     score = model.evaluate(x_test, y_test, batch_size=batch_size_val)
     return score
 
 def get_performace_metrics(history):
+    ''' Stores and returns the following metrics for each epoch '''
     acc = history.history['accuracy']
     val_acc = history.history['val_accuracy']
     loss = history.history['loss']
@@ -179,6 +188,7 @@ def get_performace_metrics(history):
     return acc, val_acc, loss, val_loss
 
 def plot_loss_graph(acc, val_acc, loss, val_loss):
+    ''' Plots the graph '''
     epochs = range(len(acc))
     plt.plot(epochs, acc, 'b', label='Training acc')
     plt.plot(epochs, val_acc, 'r', label='Validation acc')
@@ -195,10 +205,12 @@ def plot_loss_graph(acc, val_acc, loss, val_loss):
     plt.show()
 
 def save_tokenizer(file_dir, output_token_file, tokenizer):
+    ''' Saves the tokenizer file '''
     with open(file_dir + f'/{output_token_file}', 'wb') as handle:
         pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 def save_model(model, file_dir, output_model_file):
+    ''' Saves the model file '''
     model.save(file_dir + '/{}'.format(output_model_file))
 
 if __name__ == "__main__":
