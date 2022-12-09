@@ -167,7 +167,7 @@ def fit_model(model, x_train, y_train, epochs_val, batch_size_val, callbacks):
                         callbacks=callbacks)
         return history
 
-def get_score(model, batch_size_val):
+def get_score(model, x_test, y_test, batch_size_val):
     score = model.evaluate(x_test, y_test, batch_size=batch_size_val)
     return score
 
@@ -198,7 +198,7 @@ def save_tokenizer(file_dir, output_token_file, tokenizer):
     with open(file_dir + f'/{output_token_file}', 'wb') as handle:
         pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def save_model(file_dir, output_model_file):
+def save_model(model, file_dir, output_model_file):
     model.save(file_dir + '/{}'.format(output_model_file))
 
 if __name__ == "__main__":
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     callbacks = get_callbacks()
 
     history = fit_model(model, x_train, y_train, epochs_val, batch_size_val, callbacks)
-    score = get_score(model, batch_size_val)
+    score = get_score(model, x_test, y_test, batch_size_val)
     print()
     print("ACCURACY:", score[1])
     print("LOSS:", score[0])
@@ -307,4 +307,4 @@ if __name__ == "__main__":
 
     save_tokenizer(file_dir, output_token_file, tokenizer)
 
-    save_model(file_dir, output_model_file)
+    save_model(model, file_dir, output_model_file)

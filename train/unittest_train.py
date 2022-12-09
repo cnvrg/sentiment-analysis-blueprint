@@ -5,7 +5,7 @@ import yaml
 from yaml.loader import SafeLoader
 from nltk.stem import SnowballStemmer
 from keras.preprocessing.text import Tokenizer
-from train import read_dataset, decode_sentiment, preprocess, split_train_test_data, create_documents, word_2_vector, tokenize_text, padding_sequences
+from train import read_dataset, decode_sentiment, preprocess, split_train_test_data, create_documents, word_2_vector, tokenize_text, padding_sequences, label_encoding, prepare_labels, create_embedding_layer, build_model, compile_model, get_callbacks, fit_model, get_score, get_performace_metrics, save_tokenizer, save_model
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 YAML_ARG_TO_TEST = "test_arguments"
 
@@ -36,6 +36,16 @@ class test_train(unittest.TestCase):
         self.w2v_epochs_val = 32
         self.w2v_min_count = 10
         self.seq_len = 300
+        self.epochs_val = 64
+        self.batch_size_val = 256
+        self.output_token_file = "tokenizer.pickle"
+        self.output_model_file = "model.h5"
+
+        # Unit-test data directory - temporary 
+        self.unittest_dir = "unit_test_data"
+        self.local_dir = os.path.dirname(os.path.abspath(__file__))
+        self.unittest_data_path = os.path.join(self.local_dir, self.unittest_dir)
+        os.mkdir(self.unittest_data_path)
 
         self.df.target = self.df.target.apply(lambda x: decode_sentiment(x))
         self.stemmer = SnowballStemmer("english")
@@ -49,6 +59,29 @@ class test_train(unittest.TestCase):
         self.tokenizer, self.vocab_size = tokenize_text(self.df_train)
 
         self.x_train, self.x_test = padding_sequences(self.df_train, self.df_test, self.tokenizer, self.seq_len)
+
+        self.encoder, self.labels = label_encoding(self.df_train)
+        self.y_train, self.y_test = prepare_labels(self.df_train, self.df_test, self.encoder)
+
+        self.embedding_layer = create_embedding_layer(self.vocab_size, self.tokenizer, self.w2v_model, self.w2v_size, self.seq_len)
+
+        self.model = build_model(self.embedding_layer)
+        compile_model(self.model)
+
+        self.callbacks = get_callbacks()
+
+        self.history = fit_model(self.model, self.x_train, self.y_train, self.epochs_val, self.batch_size_val, self.callbacks)
+        self.score = get_score(self.model, self.x_test, self.y_test, self.batch_size_val)
+
+        self.acc, self.val_acc, self.loss, self.val_loss = get_performace_metrics(self.history)
+
+        save_tokenizer(self.unittest_data_path , self.output_token_file, self.tokenizer)
+        save_model(self.model, self.unittest_data_path, self.output_model_file)
+
+    @classmethod
+    def tearDownClass(self):
+        ''' Clean up function '''
+        shutil.rmtree(self.unittest_data_path)
 
     def test_df_read(self):
         ''' Checks if pandas dataframe is retuned '''
