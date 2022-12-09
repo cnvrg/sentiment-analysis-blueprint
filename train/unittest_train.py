@@ -4,7 +4,6 @@ import os, shutil, sys
 import yaml
 from yaml.loader import SafeLoader
 from nltk.stem import SnowballStemmer
-from keras.preprocessing.text import Tokenizer
 from train import read_dataset, decode_sentiment, preprocess, split_train_test_data, create_documents, word_2_vector, tokenize_text, padding_sequences, label_encoding, prepare_labels, create_embedding_layer, build_model, compile_model, get_callbacks, fit_model, get_score, get_performace_metrics, save_tokenizer, save_model
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 YAML_ARG_TO_TEST = "test_arguments"
@@ -33,11 +32,11 @@ class test_train(unittest.TestCase):
         self.create_docs_df = pandas.DataFrame(self.create_docs_data)
         self.w2v_size = 300
         self.w2v_window = 7
-        self.w2v_epochs_val = 32
+        self.w2v_epochs_val = 128
         self.w2v_min_count = 10
         self.seq_len = 300
-        self.epochs_val = 64
-        self.batch_size_val = 256
+        self.epochs_val = 10
+        self.batch_size_val = 12
         self.output_token_file = "tokenizer.pickle"
         self.output_model_file = "model.h5"
 
@@ -69,8 +68,8 @@ class test_train(unittest.TestCase):
         compile_model(self.model)
 
         self.callbacks = get_callbacks()
-
-        self.history = fit_model(self.model, self.x_train, self.y_train, self.epochs_val, self.batch_size_val, self.callbacks)
+        # No callbacks or early stopping provided to the following test model
+        self.history = fit_model(self.model, self.x_train, self.y_train, self.epochs_val, self.batch_size_val, None)
         self.score = get_score(self.model, self.x_test, self.y_test, self.batch_size_val)
 
         self.acc, self.val_acc, self.loss, self.val_loss = get_performace_metrics(self.history)
@@ -126,4 +125,60 @@ class test_train(unittest.TestCase):
         ''' Checks the document creation process '''
         self.assertListEqual(
             create_documents(self.create_docs_df)[0], self.test_cfg['document'] 
+        )
+
+    def test_labels_generated(self):
+        ''' Checks the labels generated '''
+        self.assertListEqual(
+            sorted(["POSITIVE", "NEGATIVE", "NEUTRAL"]), sorted(self.labels)
+        )
+        
+    def test_model_predictions(self):
+        ''' Checks the model performance metrics - loss and accuracy '''
+        # Checks the model accuracy
+        self.assertTrue(
+            0 < self.score[1] <= 1
+        )
+        # Checks the model loss
+        self.assertTrue(
+            0 < self.score[0] 
+        )
+
+    def test_model_history(self):
+        ''' Checks if loss and accuracy are returned for all of the epochs specified above '''
+        self.assertEqual(
+            len(self.acc), self.epochs_val
+        )
+        self.assertEqual(
+            len(self.val_acc), self.epochs_val
+        )
+        self.assertEqual(
+            len(self.loss), self.epochs_val
+        )
+        self.assertEqual(
+            len(self.val_loss), self.epochs_val
+        )
+
+    def test_model_history_metrics(self):
+        ''' Checks the average performance metrics from history '''
+        self.assertTrue(
+            0 < sum(self.acc) / len(self.acc) <= 1
+        )
+        self.assertTrue(
+            0 < sum(self.val_acc) / len(self.val_acc) <= 1
+        )
+        self.assertTrue(
+            0 < sum(self.loss) / len(self.loss) 
+        )
+        self.assertTrue(
+            0 < sum(self.val_loss) / len(self.val_loss) 
+        )
+
+    def test_model_file_exists(self):
+        ''' Checks if the model and tokenizer files are saved '''
+        self.assertTrue(
+            os.path.isfile(self.unittest_data_path + '/' + self.output_model_file)
+        )
+        self.assertTrue(
+            os.path.isfile(self.unittest_data_path + '/' + self.output_token_file)
         )
