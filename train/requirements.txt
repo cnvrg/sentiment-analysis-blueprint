@@ -1,7 +1,8 @@
-tensorflow-macos
+tensorflow-cpu
 pandas
 sklearn
 scikit-learn
 nltk
 gensim
 matplotlib
+pyyaml

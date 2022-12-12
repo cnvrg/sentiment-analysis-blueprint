@@ -20,8 +20,8 @@ class test_train(unittest.TestCase):
             self.test_cfg = yaml.load(c_info_file, Loader=SafeLoader)
 
         self.test_cfg = self.test_cfg[YAML_ARG_TO_TEST]
-        self.unittest_dataset_dir = 'unittest_dataset'
-        self.unittest_data = 'unittest_data.csv'
+        self.unittest_dataset_dir = self.test_cfg['unittest_dataset_dir']
+        self.unittest_data = self.test_cfg['unittest_data']
         self.curr_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_path = os.path.join(self.curr_dir, self.unittest_dataset_dir, self.unittest_data)
         self.df = read_dataset(self.data_path)
