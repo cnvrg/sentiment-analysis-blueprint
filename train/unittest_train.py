@@ -35,7 +35,7 @@ class test_train(unittest.TestCase):
         self.w2v_epochs_val = 128
         self.w2v_min_count = 10
         self.seq_len = 300
-        self.epochs_val = 10
+        self.epochs_val = 30
         self.batch_size_val = 12
         self.output_token_file = "tokenizer.pickle"
         self.output_model_file = "model.h5"
@@ -68,8 +68,7 @@ class test_train(unittest.TestCase):
         compile_model(self.model)
 
         self.callbacks = get_callbacks()
-        # No callbacks or early stopping provided to the following test model
-        self.history = fit_model(self.model, self.x_train, self.y_train, self.epochs_val, self.batch_size_val, None)
+        self.history = fit_model(self.model, self.x_train, self.y_train, self.epochs_val, self.batch_size_val, self.callbacks)
         self.score = get_score(self.model, self.x_test, self.y_test, self.batch_size_val)
 
         self.acc, self.val_acc, self.loss, self.val_loss = get_performace_metrics(self.history)
@@ -134,44 +133,29 @@ class test_train(unittest.TestCase):
         )
         
     def test_model_predictions(self):
-        ''' Checks the model performance metrics - loss and accuracy '''
+        ''' Checks the model performance metrics - loss and accuracy for test set '''
         # Checks the model accuracy
         self.assertTrue(
-            0 < self.score[1] <= 1
+            0.5 < self.score[1] <= 1
         )
         # Checks the model loss
         self.assertTrue(
-            0 < self.score[0] 
-        )
-
-    def test_model_history(self):
-        ''' Checks if loss and accuracy are returned for all of the epochs specified above '''
-        self.assertEqual(
-            len(self.acc), self.epochs_val
-        )
-        self.assertEqual(
-            len(self.val_acc), self.epochs_val
-        )
-        self.assertEqual(
-            len(self.loss), self.epochs_val
-        )
-        self.assertEqual(
-            len(self.val_loss), self.epochs_val
+            0.5 < self.score[0] 
         )
 
     def test_model_history_metrics(self):
-        ''' Checks the average performance metrics from history '''
+        ''' Checks the performance metrics from history for train and validation set '''
         self.assertTrue(
-            0 < sum(self.acc) / len(self.acc) <= 1
+            0.5 < self.acc[-1] <= 1
         )
         self.assertTrue(
-            0 < sum(self.val_acc) / len(self.val_acc) <= 1
+            0.4 < self.val_acc[-1] <= 1
         )
         self.assertTrue(
-            0 < sum(self.loss) / len(self.loss) 
+            0 < self.loss[-1]
         )
         self.assertTrue(
-            0 < sum(self.val_loss) / len(self.val_loss) 
+            0 < self.val_loss[-1]
         )
 
     def test_model_file_exists(self):
