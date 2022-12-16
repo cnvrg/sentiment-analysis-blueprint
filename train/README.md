@@ -29,4 +29,18 @@ run python3 train.py -f  for info about more optional parameters
 
 `--epochs_val` - (int) (Default: 5) The number of epochs the algorithm performs in the training phaze.
 
-`--batch_size_val` - (int) (Default: 32) The number of texts the model goes over in each epoch.
+`--batch_size_val` - (int) (Default: 256) The size of each batch to train on.
+
+`--w2v_epochs_val` - (int) (Default: 32) The number of training epochs to run for word to vector model.
+
+`--train_size` - (float) (Default: 0.8) The fraction of dataset to be assigned as training data.
+
+`--w2v_size` - (int) (Default: 300) The vector size parameter in word to vector model.
+
+`--w2v_window` - (int) (Default: 7) The window size parameter in word to vector model.
+
+`--w2v_min_count` - (int) (Default: 10) The min count parameter in word to vector model.
+
+`--seq_len` - (int) (Default: 300) The seq len for NLP model.
+
+`--local_dir` - (string) (Default: cnvrg_workdir) The file_dir to store model file to. 
